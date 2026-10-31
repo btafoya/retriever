@@ -1,4 +1,4 @@
-const {createApp, ref, computed} = Vue
+const {createApp, ref} = Vue
 
 const urlcopy = {
     props: ['url'],
@@ -9,14 +9,15 @@ const urlcopy = {
     },
     methods: {
         copyToClipboard() {
-            navigator.clipboard.writeText(this.url)
-            this.copyText = 'Copied!'
+            navigator.clipboard.writeText(this.url).then(() => {
+                this.copyText = 'Copied!'
+            })
         }
     },
     template: `
         <div class="input-group mb-3">
-            <input type="text" class="form-control" v-model="url" disabled>
-            <button class="btn btn-primary btn-copy" type="button" @click.native="copyToClipboard">
+            <input type="text" class="form-control" :value="url" disabled>
+            <button class="btn btn-primary btn-copy" type="button" @click="copyToClipboard">
                 {{ copyText }}
             </button>
         </div>`
@@ -29,14 +30,13 @@ createApp({
     setup() {
         const url = ref('')
         const inputData = ref('')
-        const encryptedUrl = ref('')
         const newSecret = ref(false)
         const decryptSecret = ref(false)
         const errorShow = ref(false)
         const errorTitle = ref('')
         const errorMessage = ref('')
 
-        let publicKey, privateKey, publicKeySer, encryptedText;
+        let publicKey;
 
         function showError(error, title, message) {
             console.log(error)
@@ -47,9 +47,7 @@ createApp({
         }
 
         function encrypt() {
-            encryptString(publicKey, inputData.value).then(
-                (value) => value
-            ).then(function (encryptedValue) {
+            encryptString(publicKey, inputData.value).then(function (encryptedValue) {
                 url.value = window.location.href + ';' + encryptedValue
                 inputData.value = ""
             }).catch(function (error) {
@@ -61,16 +59,14 @@ createApp({
 
         function decrypt() {
             let [pubKeySer, encryptedText] = location.hash.replace('#', '').split(';')
-            load_key(window.localStorage.getItem(pubKeySer), 'decrypt').then(function (privKey) {
-                return privKey
-            }).then(function (privKey) {
-                return decryptString(privKey, encryptedText).then((value) => value)
+            load_private_key(pubKeySer).then(function (privKey) {
+                return decryptString(privKey, encryptedText)
             }).then(function (decryptedValue) {
                 inputData.value = decryptedValue
             }).catch(function (error) {
                 let title, message
 
-                if (error.toString() === 'OperationError') {
+                if (error.name === 'OperationError') {
                     title = 'Unable to decrypt'
                     message = 'Unable to decrypt secret. Make sure the url is correct and was not cut off.'
                 } else {
@@ -95,7 +91,7 @@ createApp({
             decryptSecret.value = true
             decrypt()
         } else {
-            load_key(location.hash.split('#')[1], 'encrypt').then(function (value) {
+            load_public_key(location.hash.split('#')[1]).then(function (value) {
                 publicKey = value
             }).catch(function (error) {
                 let title = 'Unable to load public key'
@@ -106,7 +102,6 @@ createApp({
 
         return {
             encrypt,
-            encryptedUrl,
             inputData,
             newSecret,
             decryptSecret,
